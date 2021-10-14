@@ -233,9 +233,10 @@ class role_ad_integration (
     $read_acl_by_path.each |$read_folder, $read_groups| {
       $read_acl_list = $read_groups.map |$read_group| { "group:${downcase($read_group)}:r-x" }
       $read_acl_default_list = $read_groups.map |$read_group| { "default:group:${downcase($read_group)}:r-x" }
+      $read_acl_mask = ["mask::rwx", "default:mask::rwx"]
       posix_acl { $read_folder:
         action     => set,
-        permission => concat($read_acl_list, $read_acl_default_list),
+        permission => concat($read_acl_list, $read_acl_default_list, $read_acl_mask),
         provider   => posixacl,
         recursive  => true,
         require    => Package['acl'],
