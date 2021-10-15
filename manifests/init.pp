@@ -115,7 +115,7 @@ class role_ad_integration (
         'sssd' => {
           'domains'             => downcase($domain),
           'config_file_version' => 2,
-          'services'            => ['nss', 'pam'],
+          'services'            => ['nss', 'pam', 'ssh'],
         },
         "domain/${downcase($domain)}" => {
           'ad_domain'                      => downcase($domain),
