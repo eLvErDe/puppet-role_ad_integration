@@ -79,8 +79,14 @@ class role_ad_integration (
   Array[Pattern[/\A[a-zA-Z0-9\.\-_]{3,}\z/]] $allowed_groups = [],
   Array[Pattern[/\A[a-zA-Z0-9\.\-_]{3,}\z/]] $admin_groups = [],
   Hash[Pattern[/\A[a-zA-Z0-9\.\-_]{3,}\z/], Array[String[1]]] $sudo_by_group = {},
-  Hash[Stdlib::Unixpath, Array[Pattern[/\A[a-zA-Z0-9\.\-_]{3,}\z/], 1]] $read_acl_by_path = {},
-  Hash[Stdlib::Unixpath, Array[Pattern[/\A[a-zA-Z0-9\.\-_]{3,}\z/], 1]] $write_acl_by_path = {},
+  Hash[Stdlib::Unixpath, Struct[{
+    groups => Array[Pattern[/\A[a-zA-Z0-9\.\-_]{3,}\z/], 1],
+    mask   => Optional[Pattern[/\A(r|\-)(w|\-)(x|\-)\z/]],
+  }]] $read_acl_by_path = {},
+  Hash[Stdlib::Unixpath, Struct[{
+    groups => Array[Pattern[/\A[a-zA-Z0-9\.\-_]{3,}\z/], 1],
+    mask   => Optional[Pattern[/\A(r|\-)(w|\-)(x|\-)\z/]],
+  }]] $write_acl_by_path = {},
   Optional[String] $motd = undef,
 ) {
 
@@ -223,24 +229,28 @@ class role_ad_integration (
 
     # Configure read/write FS permissions
     ensure_packages('acl')
-    $read_acl_by_path.each |$read_folder, $read_groups| {
-      $read_groups.each |$read_group| {
+    $read_acl_by_path.each |$read_folder, $read_params| {
+      $read_params['groups'].each |$read_group| {
         if !($read_group in $allowed_groups) {
           fail("Read ACL group ${read_group} must be one of allowed_groups ${allowed_groups}")
         }
       }
     }
-    $write_acl_by_path.each |$write_folder, $write_groups| {
-      $write_groups.each |$write_group| {
+    $write_acl_by_path.each |$write_folder, $write_params| {
+      $write_params['groups'].each |$write_group| {
         if !($write_group in $allowed_groups) {
           fail("Write ACL group ${write_group} must be one of allowed_groups ${allowed_groups}")
         }
       }
     }
-    $read_acl_by_path.each |$read_folder, $read_groups| {
-      $read_acl_list = $read_groups.map |$read_group| { "group:${downcase($read_group)}:r-x" }
-      $read_acl_default_list = $read_groups.map |$read_group| { "default:group:${downcase($read_group)}:r-x" }
-      $read_acl_mask = ["mask::rwx", "default:mask::rwx"]
+    $read_acl_by_path.each |$read_folder, $read_params| {
+      $read_acl_list = $read_params['groups'].map |$read_group| { "group:${downcase($read_group)}:r-x" }
+      $read_acl_default_list = $read_params['groups'].map |$read_group| { "default:group:${downcase($read_group)}:r-x" }
+      if ($read_params['mask']) {
+        $read_acl_mask = ["mask::${read_params['mask']}", "default:mask::${read_params['mask']}"]
+      } else {
+        $read_acl_mask = []
+      }
       posix_acl { $read_folder:
         action     => set,
         permission => concat($read_acl_list, $read_acl_default_list, $read_acl_mask),
@@ -249,10 +259,14 @@ class role_ad_integration (
         require    => Package['acl'],
       }
     }
-    $write_acl_by_path.each |$write_folder, $write_groups| {
-      $write_acl_list = $write_groups.map |$write_group| { "group:${downcase($write_group)}:rwx" }
-      $write_acl_default_list = $write_groups.map |$write_group| { "default:group:${downcase($write_group)}:rwx" }
-      $write_acl_mask = ["mask::rwx", "default:mask::rwx"]
+    $write_acl_by_path.each |$write_folder, $write_params| {
+      $write_acl_list = $write_params['groups'].map |$write_group| { "group:${downcase($write_group)}:rwx" }
+      $write_acl_default_list = $write_params['groups'].map |$write_group| { "default:group:${downcase($write_group)}:rwx" }
+      if ($write_params['mask']) {
+        $write_acl_mask = ["mask::${write_params['mask']}", "default:mask::${write_params['mask']}"]
+      } else {
+        $write_acl_mask = []
+      }
       posix_acl { $write_folder:
         action     => set,
         permission => concat($write_acl_list, $write_acl_default_list, $write_acl_mask),
