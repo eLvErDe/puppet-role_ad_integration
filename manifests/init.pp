@@ -256,7 +256,7 @@ class role_ad_integration (
         permission => concat($read_acl_list, $read_acl_default_list, $read_acl_mask),
         provider   => posixacl,
         recursive  => true,
-        require    => Package['acl'],
+        require    => [Package['acl'], Class['::sssd']],
       }
     }
     $write_acl_by_path.each |$write_folder, $write_params| {
@@ -272,7 +272,7 @@ class role_ad_integration (
         permission => concat($write_acl_list, $write_acl_default_list, $write_acl_mask),
         provider   => posixacl,
         recursive  => true,
-        require    => Package['acl'],
+        require    => [Package['acl'], Class['::sssd']],
       }
     }
 
