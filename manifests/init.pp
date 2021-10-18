@@ -110,12 +110,19 @@ class role_ad_integration (
 
     Class['::adcli'] -> Class['::sssd']
 
+    # On recent Debian services are activated by systemd socket
+    if ($::operatingsystem == 'Debian' and Integer($::operatingsystemmajrelease) >= 11) {
+      $services = []
+    } else {
+      $services = ['nss', 'pam', 'ssh']
+    }
+
     class {'::sssd':
       config => {
         'sssd' => {
           'domains'             => downcase($domain),
           'config_file_version' => 2,
-          'services'            => ['nss', 'pam', 'ssh'],
+          'services'            => $services,
         },
         "domain/${downcase($domain)}" => {
           'ad_domain'                      => downcase($domain),
