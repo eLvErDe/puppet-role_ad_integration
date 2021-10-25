@@ -100,6 +100,10 @@ class role_ad_integration (
       fail("Unsupported ::operatingsystem ${::operatingsystem} ::operatingsystemmajrelease ${$::operatingsystemmajrelease}, only Debian 10/11 and CentOS 7 supported")
     }
 
+    if (length($::hostname) > 15) {
+      fail("Unsupported ::hostname ${::hostname}, must be 15 characters or less")
+    }
+
     # Join to Active Directory
     class {'::adcli':
       ad_domain        => downcase($domain),
