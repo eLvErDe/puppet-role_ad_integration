@@ -234,20 +234,6 @@ class role_ad_integration (
     # Configure read/write FS permissions
     ensure_packages('acl')
     $read_acl_by_path.each |$read_folder, $read_params| {
-      $read_params['groups'].each |$read_group| {
-        if !($read_group in $allowed_groups) {
-          fail("Read ACL group ${read_group} must be one of allowed_groups ${allowed_groups}")
-        }
-      }
-    }
-    $write_acl_by_path.each |$write_folder, $write_params| {
-      $write_params['groups'].each |$write_group| {
-        if !($write_group in $allowed_groups) {
-          fail("Write ACL group ${write_group} must be one of allowed_groups ${allowed_groups}")
-        }
-      }
-    }
-    $read_acl_by_path.each |$read_folder, $read_params| {
       $read_acl_list = $read_params['groups'].map |$read_group| { "group:${downcase($read_group)}:r-x" }
       $read_acl_default_list = $read_params['groups'].map |$read_group| { "default:group:${downcase($read_group)}:r-x" }
       if ($read_params['mask']) {
