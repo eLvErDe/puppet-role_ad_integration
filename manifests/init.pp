@@ -14,8 +14,8 @@
 #     allowed_groups => ['Administrators', 'Users'],
 #     admin_groups => ['Administrators'],
 #     sudo_by_group => {'Users' => ['ALL=(root) NOPASSWD:/usr/sbin/reboot', 'ALL=(root) NOPASSWD:/usr/sbin/poweroff']}
-#     read_acl_by_path => {'/var/log': ['Users']},
-#     write_acl_by_path => {'/etc': ['Administrators'], '/opt': ['Administrators']},
+#     read_acl_by_path => {'/var/log': {groups => ['Users']}},
+#     write_acl_by_path => {'/opt': {groups => ['Administrators'], mask => 'rwx'}},
 #     motd => 'This is a restricted server',
 #   }
 #
