@@ -9,6 +9,7 @@
 #     ad_join_password => 'p4ssw0rd',
 #     ad_join_machines_ou => 'OU=machines,DC=domain,DC=local',
 #     ad_gpo_map_remote_interactive => ['+xrdp-sesman'],
+#     ad_update_samba_machine_account_password => true,
 #     shell   => '/bin/bash',
 #     homedir => '/home/%d/%u',
 #     allowed_groups => ['Administrators', 'Users'],
@@ -36,6 +37,9 @@
 #
 # @param ad_gpo_map_remote_interactive
 #  Service allowed for remote interactive login, +sshd is implicit here and can be disabled with -sshd, +xrdp-sesman can be used to allow xrdp
+#
+# @param ad_update_samba_machine_account_password
+#  When updating machine domain password, also update it in Samba configuration
 #
 # @param servers
 #  List of AD servers *FQDN*, it has to be FQDNs
@@ -72,6 +76,7 @@ class role_ad_integration (
   String[1] $ad_join_password = undef,
   Pattern[/\A(OU\=|ou\=)/] $ad_join_machines_ou = undef,
   Array[Pattern[/\A(\+|-)[a-zA-Z0-9\.\-_ ]+\z/]] $ad_gpo_map_remote_interactive = [],
+  Optional[Boolean] $ad_update_samba_machine_account_password = undef,
   Array[Stdlib::Fqdn] $servers = undef,
   Variant[Stdlib::Unixpath, Enum['nologin']] $shell = 'nologin',
   Stdlib::Unixpath $homedir = '/home/%d/%u',
@@ -127,6 +132,36 @@ class role_ad_integration (
       $services = ['nss', 'pam', 'ssh']
     }
 
+    # Build hash representing AD domain config for SSSD
+    $config_domain = {
+      'ad_domain'                      => downcase($domain),
+      'ad_server'                      => $servers,
+      'krb5_realm'                     => upcase($domain),
+      'realmd_tags'                    => [],
+      'cache_credentials'              => true,
+      'id_provider'                    => 'ad',
+      'krb5_store_password_if_offline' => true,
+      'override_shell'                 => $sssd_shell,        # ignore LDAP shell property and force this value
+      'default_shell'                  => $sssd_shell,
+      'override_homedir'               => $homedir,           # ignore LDAP home property and force this value
+      'fallback_homedir'               => $homedir,
+      'ldap_id_mapping'                => true,               # sssd will hash SID, so it should be consistent accross servers 
+      'use_fully_qualified_names'      => false,              # do not require @domain.com in login username
+      'access_provider'                => 'simple',           # simple access_provider allow easy filtering on allowed groups
+      'simple_allow_groups'            => map ($allowed_groups) | $group | { strip(downcase($group)) },    # only grant access to users from these groups
+      'ad_gpo_map_remote_interactive'  => $ad_gpo_map_remote_interactive,  # can be used to allow other services for interactive login, e.g: +xrdp-sesman or -sshd to remove default sshd
+      'ldap_user_extra_attrs'          => ['altSecurityIdentities:altSecurityIdentities'],  # map ssh public keys, also require sshd_config change 
+      'ldap_user_ssh_public_key'       => 'altSecurityIdentities',
+    }
+    # Sync samba machine account password when updating it, this has to be separate because this option is not available on older SSSD versions
+    if ($ad_update_samba_machine_account_password) {
+      $config_domain_ad_update_samba_machine_account_password = {
+        'ad_update_samba_machine_account_password' => $ad_update_samba_machine_account_password,
+      }
+    } else {
+      $config_domain_ad_update_samba_machine_account_password = {}
+    }
+
     class {'::sssd':
       config => {
         'sssd' => {
@@ -134,26 +169,7 @@ class role_ad_integration (
           'config_file_version' => 2,
           'services'            => $services,
         },
-        "domain/${downcase($domain)}" => {
-          'ad_domain'                      => downcase($domain),
-          'ad_server'                      => $servers,
-          'krb5_realm'                     => upcase($domain),
-          'realmd_tags'                    => [],
-          'cache_credentials'              => true,
-          'id_provider'                    => 'ad',
-          'krb5_store_password_if_offline' => true,
-          'override_shell'                 => $sssd_shell,        # ignore LDAP shell property and force this value
-          'default_shell'                  => $sssd_shell,
-          'override_homedir'               => $homedir,           # ignore LDAP home property and force this value
-          'fallback_homedir'               => $homedir,
-          'ldap_id_mapping'                => true,               # sssd will hash SID, so it should be consistent accross servers 
-          'use_fully_qualified_names'      => false,              # do not require @domain.com in login username
-          'access_provider'                => 'simple',           # simple access_provider allow easy filtering on allowed groups
-          'simple_allow_groups'            => map ($allowed_groups) | $group | { strip(downcase($group)) },    # only grant access to users from these groups
-          'ad_gpo_map_remote_interactive'  => $ad_gpo_map_remote_interactive,  # can be used to allow other services for interactive login, e.g: +xrdp-sesman or -sshd to remove default sshd
-          'ldap_user_extra_attrs'          => ['altSecurityIdentities:altSecurityIdentities'],  # map ssh public keys, also require sshd_config change 
-          'ldap_user_ssh_public_key'       => 'altSecurityIdentities',
-        }  # end: "domain/${downcase($domain)}"
+        "domain/${downcase($domain)}" => $config_domain + $config_domain_ad_update_samba_machine_account_password,
       } # end: config
     } # end: class {'::sssd':
 
